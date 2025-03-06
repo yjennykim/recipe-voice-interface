@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Book</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-4">
+        <h2>Recipe List 
+            <button class="btn btn-success btn-sm" data-bs-toggle="modal" data-bs-target="#addRecipeModal">+</button>
+        </h2>
+        <ul id="recipeList" class="list-group"></ul>
+
+        <div id="recipeDetails" class="mt-4 d-none">
+            <h3 id="recipeTitle"></h3>
+            <p><strong>Ingredients:</strong></p>
+            <ul id="recipeIngredients"></ul>
+            <p><strong>Instructions:</strong><span id="recipeInstructions"></span></p>
+            <p><strong>Time:</strong> <span id="recipeTime"></span></p>
+            <!-- <button id="editRecipe" class="btn btn-warning">Edit</button> -->
+            <button id="deleteRecipe" class="btn btn-danger">Delete</button>
+        </div>
+    </div>
+
+    <div class="modal fade" id="addRecipeModal" tabindex="-1" aria-labelledby="addRecipeModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addRecipeModalLabel">Add Recipe</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addRecipeForm">
+                        <div class="mb-3">
+                            <label for="recipeName" class="form-label">Recipe Name</label>
+                            <input type="text" class="form-control" id="recipeName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Ingredients</label>
+                            <div id="ingredientList">
+                                <div class="input-group mb-2 ingredient-item">
+                                    <input type="text" class="form-control ingredient-name" placeholder="Ingredient Name">
+                                    <input type="text" class="form-control ingredient-amount" placeholder="Amount">
+                                    <button class="btn btn-danger remove-ingredient">-</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm" id="addIngredient">+</button>
+                        </div>
+                        <div class="mb-3">
+                            <label for="formRecipeInstructions" class="form-label">Instructions</label>
+                            <textarea class="form-control" rows="3" id="formRecipeInstructions" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="formRecipeTime" class="form-label">Time</label>
+                            <input type="text" class="form-control" id="formRecipeTime" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Add Recipe</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function fetchRecipes() {
+            fetch("/v1/recipes")
+                .then(response => response.json())
+                .then(responseData => {
+                    console.log("Refreshing recipes list", responseData)
+                    const recipes = responseData.recipes;
+                    const recipeList = document.getElementById("recipeList");
+                    recipeList.innerHTML = "";
+                    
+                    Object.entries(recipes).forEach(([name, details]) => {
+                        const listItem = document.createElement("li");
+                        listItem.classList.add("list-group-item", "list-group-item-action");
+                        listItem.textContent = name;
+                        listItem.onclick = () => showRecipeDetails(name, details);
+                        recipeList.appendChild(listItem);
+                    });
+                })
+                .catch(error => console.error("Error:", error));
+        }
+
+        function showRecipeDetails(name, recipe) {
+            document.getElementById("recipeTitle").textContent = name;
+            document.getElementById("recipeIngredients").innerHTML = Object.entries(recipe.ingredients)
+                .map(([key, value]) => `<li>${key}: ${value}</li>`).join("");
+            document.getElementById("recipeInstructions").textContent = recipe.instructions;
+            document.getElementById("recipeTime").textContent = recipe.time;
+            document.getElementById("recipeDetails").classList.remove("d-none");
+
+            // document.getElementById("editRecipe").onclick = () => editRecipe(name, recipe);
+            document.getElementById("deleteRecipe").onclick = () => deleteRecipe(name);
+        }
+
+        function deleteRecipe(recipeName) {
+            console.log("Button clicked", recipeName)
+            fetch(`/v1/delete_recipe?name=${encodeURIComponent(recipeName)}`, { method: "DELETE" })
+                .then(response => response.json())
+                .then(() => {
+                    alert("Recipe deleted!");
+                    document.getElementById("recipeDetails").classList.add("d-none");
+                    fetchRecipes();
+                })
+                .catch(error => console.error("Error:", error));
+        }
+
+        document.getElementById("addIngredient").addEventListener("click", function () {
+            const ingredientList = document.getElementById("ingredientList");
+            const ingredientItem = document.createElement("div");
+            ingredientItem.classList.add("input-group", "mb-2", "ingredient-item");
+            ingredientItem.innerHTML = `
+                <input type="text" class="form-control ingredient-name" placeholder="Ingredient Name">
+                <input type="text" class="form-control ingredient-amount" placeholder="Amount">
+                <button class="btn btn-danger remove-ingredient">-</button>
+            `;
+            ingredientList.appendChild(ingredientItem);
+        });
+
+        document.getElementById("ingredientList").addEventListener("click", function (event) {
+            if (event.target.classList.contains("remove-ingredient")) {
+                event.target.closest(".ingredient-item").remove();
+            }
+        });
+
+        document.getElementById("addRecipeForm").addEventListener("submit", function(event) {
+            event.preventDefault();
+            
+            const name = document.getElementById("recipeName").value;
+            const instructions = document.getElementById("formRecipeInstructions").value;
+            const time = document.getElementById("formRecipeTime").value;
+
+            const ingredients = {};
+            document.querySelectorAll(".ingredient-item").forEach(item => {
+                const key = item.querySelector(".ingredient-name").value.trim();
+                const value = item.querySelector(".ingredient-amount").value.trim();
+                if (key && value) {
+                    ingredients[key] = value;
+                }
+            });
+
+            const newRecipe = { name, ingredients, instructions, time };
+            console.log("Created a new recipe!", newRecipe)
+
+            fetch("/v1/add_recipe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(newRecipe)
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.message);
+                document.getElementById("addRecipeForm").reset();
+                document.getElementById("ingredientList").innerHTML = "";
+                bootstrap.Modal.getInstance(document.getElementById("addRecipeModal")).hide();
+                fetchRecipes();
+            })
+            .catch(error => console.error("Error:", error));
+        });
+
+        document.addEventListener("DOMContentLoaded", fetchRecipes);
+    </script>
+
+    <!-- bootstrap -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
