@@ -38,7 +38,7 @@ def recipe_to_html(recipe):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>{recipe.name.title()}</title>
+        <title>{recipe["name"].title()}</title>
         <style>
             body {{ font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }}
             h2 {{ color: #d35400; }}
@@ -47,7 +47,7 @@ def recipe_to_html(recipe):
         </style>
     </head>
     <body>
-        <h2>{recipe.name.title()}</h2>
+        <h2>{recipe["name"].title()}</h2>
         <h3>Ingredients:</h3>
         <ul>
     """
@@ -57,10 +57,17 @@ def recipe_to_html(recipe):
     html += """
         </ul>
         <h3>Instructions:</h3>
-        <p>
+        <ol>
     """
 
-    html += recipe["instructions"]
+    # Fix the instructions section by splitting by line breaks and adding each instruction in an <li>
+    instructions = recipe["instructions"].strip().split("\n")
+    for instruction in instructions:
+        html += f"<li>{instruction.strip()}</li>\n"
+
+    html += """
+        </ol>
+    """
 
     html += "</p>"
 
@@ -90,9 +97,7 @@ def add_recipe_api():
 def get_recipe():
     print("/v1/get_recipe endpoint triggered")
     query = request.headers["Query"]
-    recipe_name = recipeBook.get_best_matching_recipe(query)
-
-    recipe = recipeBook.get_recipe(recipe_name)
+    recipe = recipeBook.get_best_matching_recipe(query)
     if not recipe:
         return jsonify({"answer": "I couldn't find that recipe."})
 

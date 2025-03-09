@@ -8,6 +8,7 @@ BACKUP_FILE = "recipes_backup.json"
 class RecipeBook(object):
     def __init__(self):
         self.recipes = self.load_recipes()
+        print("The recipes loaded are", self.recipes)
 
     def get_recipes(self):
         return self.recipes
