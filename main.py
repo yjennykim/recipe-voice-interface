@@ -2,10 +2,17 @@ from flask import Flask
 from flask import Flask, render_template, request, session, redirect, url_for
 from flask import Flask, request, jsonify, send_from_directory
 from recipe_manager import RecipeBook
+from dotenv import load_dotenv
 import os
 import json
 import whisper
+import openai
 
+load_dotenv()
+client = openai.OpenAI(
+    project='proj_EFY0XEao2r1dpkGCiYZEQ562',
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 
 app = Flask(__name__, static_folder="static")
 model = whisper.load_model("base")
@@ -100,41 +107,39 @@ def delete_recipe_api():
         success = recipeBook.delete_recipe(recipe["name"])
         if not success:
             return jsonify({"answer": "I couldn't find that recipe."})
-    
+
         return jsonify({"message": "Recipe deleted successfully"}), 200
 
     return jsonify({"message": "Could not find recipe"})    
 
 @app.route("/v1/get_recipe_info", methods=["POST"])
 def get_recipe_info():
-    print("\n------ REQUEST DETAILS ------")
-    print("Full URL:", request.url)
-    print("Request Method:", request.method)
-    print("Request Headers:\n", request.headers)
-    print("Form Data:", request.form)
-    print("JSON Payload:", request.get_json())
-    print("--------------------------------\n")
-
     data = request.get_json()
     query = data.get("query", "").lower() if data else ""
 
     print("query", query)
     recipe = recipeBook.get_best_matching_recipe(query)
-    name = recipe["name"]
-
-    if not recipe.name:
+    if not recipe:
         return jsonify({"answer": "I couldn't find that recipe."}), 200
-    
+
+    print("Recipe we're working with", recipe)
+    response = get_openai_response(query=query, recipe=recipe)
+    if response:
+        return jsonify({"answer": response}), 200
+
+    # fallback if OpenAI response is unavailable
+    recipe = recipeBook.get_best_matching_recipe(query)
+    name = recipe["name"]
     if "ingredient" in query or "ingredients" in query:
         return jsonify({"answer": f"The ingredients for {name} are: {json.dumps(recipe['ingredients'])}"}), 200
-    
+
     if "instructions" in query:
         return jsonify({"answer": f"The instructions for {name} are: {json.dumps(recipe['instructions'])}"}), 200
 
     for ingredient, quantity in recipe["ingredients"].items():
         if ingredient in query:
             return jsonify({"answer": f"{name} requires {quantity} of {ingredient}."}), 200
-    
+
     if ("how" in query and "long" in query) or "oven" in query:
         if "time" in recipe: 
             return jsonify({"answer": f"To make {name} {recipe['time']}"}), 200
@@ -142,3 +147,42 @@ def get_recipe_info():
             return jsonify({"answer": f"I'm not sure how long to cook {name}."}), 200
 
     return jsonify({"answer": "I didn't understand the question."}), 400
+
+def get_openai_response(query, recipe):
+    recipe_name = recipe.get("name", "")
+    ingredients = "\n".join([f"{ingredient}: {quantity}" for ingredient, quantity in recipe.get("ingredients", {}).items()])
+    instructions = "\n".join(recipe.get("instructions", []))
+    time = recipe.get("time", "unknown cooking time")
+
+    prompt = f"""
+    You are a cooking assistant. Below is the recipe for {recipe_name}:
+    
+    Ingredients:
+    {ingredients}
+    
+    Instructions:
+    {instructions}
+    
+    Cooking Time: {time}
+    
+    User Query: {query}
+    
+    Based on the above recipe, provide a helpful response to the user's query.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo", 
+            messages=[{
+                "role": "user", 
+                "content": prompt
+            }]
+        )
+        completion = response.parse()
+        print(completion)
+
+        return completion
+
+    except Exception as e:
+        print(f"Error calling OpenAI API: {e}")
+        return None
