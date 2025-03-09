@@ -7,6 +7,7 @@ import os
 import json
 import whisper
 import openai
+from rapidfuzz.process import extractOne
 
 load_dotenv()
 client = openai.OpenAI(
@@ -128,9 +129,9 @@ def get_recipe_info():
         return jsonify({"answer": "I couldn't find that recipe."}), 200
 
     print("Recipe we're working with", recipe)
-    response = get_openai_response(query=query, recipe=recipe)
-    if response:
-        return jsonify({"answer": response}), 200
+    # response = get_openai_response(query=query, recipe=recipe)
+    # if response:
+        # return jsonify({"answer": response}), 200
 
     # fallback if OpenAI response is unavailable
     recipe = recipeBook.get_best_matching_recipe(query)
@@ -138,7 +139,8 @@ def get_recipe_info():
 
     # what ingredients are in <recipe-name>? tell me the ingredients of <recipe-name>.
     if "ingredient" in query or "ingredients" in query:
-        return jsonify({"answer": f"The ingredients for {name} are: {json.dumps(recipe['ingredients'])}"}), 200
+        ingredient_names = list(recipe['ingredients'].keys())
+        return jsonify({"answer": f"The ingredients for {name} are: {json.dumps(ingredient_names)}"}), 200
 
     # what instructions are in <recipe-name>? tell me the instructions of <recipe-name>.
     if "instructions" in query:
@@ -147,8 +149,14 @@ def get_recipe_info():
     # how much <ingredient> should I add to <recipe-name>?
     if "how much" in query or "how many" in query:
         for ingredient, quantity in recipe["ingredients"].items():
-            if ingredient in query:
-                return jsonify({"answer": f"{name} requires {quantity} of {ingredient}."}), 200
+            result = extractOne(query, [ingredient])
+            if result:
+                match, score = result[0], result[1]  
+                if score > 80:
+                    print("returning message", {"answer": f"{name} requires {quantity} of {ingredient}."})
+                    return jsonify({"answer": f"{name} requires {quantity} of {ingredient}."}), 200
+
+        return jsonify({"answer": "Sorry, I couldn't find the ingredient."}), 200
 
     # how long should I put the <recipe-name> in the oven? what should I preheat oven to?
     if "how long" in query or "oven" in query or "time" in query:
@@ -197,3 +205,6 @@ def get_openai_response(query, recipe):
     except Exception as e:
         print(f"Error calling OpenAI API: {e}")
         return None
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5001)
