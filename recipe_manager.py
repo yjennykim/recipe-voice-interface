@@ -62,12 +62,3 @@ class RecipeBook(object):
 
         recipe = self.recipes[recipe_name]
         return recipe
-    
-    def delete_recipe_by_query(self, query):
-        recipe_name = self.get_best_matching_recipe(query, self.recipes)
-        print("recipe", recipe_name)
-        if not recipe_name:
-            return False
-        
-        self.delete_recipe(recipe_name)
-        return True

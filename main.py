@@ -130,17 +130,23 @@ def get_recipe_info():
     # fallback if OpenAI response is unavailable
     recipe = recipeBook.get_best_matching_recipe(query)
     name = recipe["name"]
+
+    # what ingredients are in <recipe-name>? tell me the ingredients of <recipe-name>.
     if "ingredient" in query or "ingredients" in query:
         return jsonify({"answer": f"The ingredients for {name} are: {json.dumps(recipe['ingredients'])}"}), 200
 
+    # what instructions are in <recipe-name>? tell me the instructions of <recipe-name>.
     if "instructions" in query:
         return jsonify({"answer": f"The instructions for {name} are: {json.dumps(recipe['instructions'])}"}), 200
 
-    for ingredient, quantity in recipe["ingredients"].items():
-        if ingredient in query:
-            return jsonify({"answer": f"{name} requires {quantity} of {ingredient}."}), 200
+    # how much <ingredient> should I add to <recipe-name>?
+    if "how much" in query or "how many" in query:
+        for ingredient, quantity in recipe["ingredients"].items():
+            if ingredient in query:
+                return jsonify({"answer": f"{name} requires {quantity} of {ingredient}."}), 200
 
-    if ("how" in query and "long" in query) or "oven" in query:
+    # how long should I put the <recipe-name> in the oven? what should I preheat oven to?
+    if "how long" in query or "oven" in query or "time" in query:
         if "time" in recipe: 
             return jsonify({"answer": f"To make {name} {recipe['time']}"}), 200
         else:
